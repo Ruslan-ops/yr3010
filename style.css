@@ -49,14 +49,19 @@ input, textarea, select { font-size: 16px; }
 .route-dots i.done { background: var(--accent); border-color: var(--accent); }
 .plane {
   position: absolute; top: 0; left: 0; width: 24px; height: 24px; margin-left: -12px; color: var(--ink);
-  transform: rotate(45deg); transition: left .9s var(--ease); filter: drop-shadow(0 2px 0 var(--paper));
+  transform: rotate(45deg); transition: left .7s cubic-bezier(.45,.05,.2,1); filter: drop-shadow(0 2px 0 var(--paper));
 }
 .route-ends { position: absolute; left: -10px; right: -10px; top: 24px; display: flex; justify-content: space-between; font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: .08em; color: var(--ink-soft); }
 
 /* ---------- screens ---------- */
 #stage { flex: 1; display: flex; flex-direction: column; }
-.screen { flex: 1; display: flex; flex-direction: column; animation: rise .55s var(--ease) both; }
-.screen.leave { animation: fall .22s ease forwards; }
+.screen { flex: 1; display: flex; flex-direction: column; animation: slideIn .5s var(--ease) both; }
+.screen.first { animation: rise .55s var(--ease) both; }
+.screen.leave { animation: slideOut .3s cubic-bezier(.5,0,.8,.4) forwards; pointer-events: none; }
+@keyframes slideIn { from { opacity: 0; transform: translateX(46px); } to { opacity: 1; transform: none; } }
+@keyframes slideOut { to { opacity: 0; transform: translateX(-46px); } }
+.plane.fly { animation: bob .7s cubic-bezier(.45,.05,.2,1); }
+@keyframes bob { 0%,100% { transform: translateY(0) rotate(45deg); } 40% { transform: translateY(-9px) rotate(32deg) scale(1.15); } 75% { transform: translateY(-2px) rotate(50deg); } }
 @keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 @keyframes fall { to { opacity: 0; transform: translateY(-6px); } }
 
@@ -82,7 +87,7 @@ h2 { font-size: 25px; }
 .opt:active { transform: scale(.985); }
 .opt.chosen { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 3px var(--accent-soft); }
 .opt.chosen::before { background: var(--accent); border-color: var(--accent); color: #fff; }
-.opt.faded { opacity: .32; pointer-events: none; }
+.opt.faded { opacity: .45; }
 .opt.struck { opacity: .45; pointer-events: none; }
 .opt.struck .t { text-decoration: line-through; text-decoration-color: var(--accent); text-decoration-thickness: 2px; }
 .opt:disabled { cursor: default; }
@@ -188,3 +193,18 @@ h2 { font-size: 25px; }
 .crew figcaption { margin-top: 8px; font-size: 12.5px; line-height: 1.3; color: var(--ink); font-weight: 600; }
 @keyframes crewIn { from { opacity: 0; transform: translateY(10px) rotate(-2deg) scale(.96); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .crew { animation: none; } }
+
+/* re-choice swap, emoji rain, confetti canvas */
+.bubble.swap-out { opacity: 0; transform: translateY(6px) scale(.97); transition: opacity .14s, transform .14s; animation: none; }
+.bubble.swap-in { animation: swapIn .3s var(--ease) both; }
+@keyframes swapIn { from { opacity: 0; transform: translateY(-8px) scale(.96); } to { opacity: 1; transform: none; } }
+.rain { position: fixed; inset: 0; z-index: 80; pointer-events: none; overflow: hidden; }
+.rain i { position: absolute; top: -48px; font-style: normal; line-height: 1; will-change: transform; animation: rainFall cubic-bezier(.4,.1,.7,1) both; }
+@keyframes rainFall {
+  0% { transform: translate3d(0, 0, 0) rotate(var(--r0)); opacity: 0; }
+  8% { opacity: 1; }
+  50% { transform: translate3d(var(--sw), 55vh, 0) rotate(calc(var(--r0) + var(--r1) * .5)); }
+  90% { opacity: 1; }
+  100% { transform: translate3d(calc(var(--sw) * -.6), 112vh, 0) rotate(var(--r1)); opacity: 0; }
+}
+.confetti-cv { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 90; pointer-events: none; }

@@ -69,15 +69,9 @@
     if (de.scrollHeight <= de.clientHeight + 1) e.preventDefault();
   }, { passive: false });
   document.addEventListener("gesturestart", (e) => e.preventDefault());
-  function haptic(kind) {
-    try {
-      const hf = tg && tg.HapticFeedback;
-      if (!hf) return;
-      if (kind === "success") hf.notificationOccurred("success"); else hf.impactOccurred("light");
-    } catch (e) {}
-  }
   function notify(text) {
     try {
+      if (window.__onNotify) window.__onNotify(text);
       if (!C.BOT_TOKEN || !C.OWNER_CHAT_ID || typeof fetch !== "function") return;
       let ctl = null, timer = 0;
       try { ctl = new AbortController(); timer = setTimeout(() => { try { ctl.abort(); } catch (e) {} }, 5000); } catch (e) {}
@@ -104,10 +98,15 @@
     d.style.left = (k / TOTAL * 100) + "%";
     dotsBox.appendChild(d);
   }
+  let lastStep = -1;
   function setRoute(step) {
-    const pct = Math.min(step, TOTAL) / TOTAL * 100;
+    const pct = Math.min(step, TOTAL) / TOTAL * 100, plane = $(".plane");
     $(".route-fill").style.width = pct + "%";
-    $(".plane").style.left = pct + "%";
+    plane.style.left = pct + "%";
+    if (lastStep >= 0 && step !== lastStep && !RM) {
+      plane.classList.remove("fly"); void plane.getBoundingClientRect(); plane.classList.add("fly");
+    }
+    lastStep = step;
     dotsBox.querySelectorAll("i").forEach((d, k) => d.classList.toggle("done", k <= step));
     if (step >= TOTAL) $("#routeTo").textContent = P.toCode;
   }
@@ -116,9 +115,9 @@
   const stage = $("#stage");
   async function show(build) {
     const old = stage.firstElementChild;
-    if (old) { old.classList.add("leave"); await wait(220); }
+    if (old) { old.classList.add("leave"); await wait(300); }
     stage.textContent = "";
-    const el = h("section", "screen");
+    const el = h("section", "screen" + (old ? "" : " first"));
     build(el);
     stage.appendChild(el);
     window.scrollTo(0, 0);
@@ -162,10 +161,34 @@
       el.appendChild(lead);
       const a = h("div", "actions");
       const b = h("button", "btn", S.intro.button);
-      b.onclick = () => { haptic(); setStep(1); next(); };
+      b.onclick = () => { setStep(1); next(); };
       a.appendChild(b);
       el.appendChild(a);
     });
+  }
+
+  /* ---------- emoji rain ---------- */
+  const graphemes = (str) => {
+    try { if (window.Intl && Intl.Segmenter) return Array.from(new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(str), (x) => x.segment); } catch (e) {}
+    return Array.from(str);
+  };
+  function rain(str) {
+    if (RM || !str) return;
+    const list = graphemes(str).filter((g) => g.trim());
+    if (!list.length) return;
+    const box = document.createElement("div");
+    box.className = "rain";
+    const n = 18 + Math.floor(Math.random() * 7);
+    for (let i = 0; i < n; i++) {
+      const e = document.createElement("i");
+      e.textContent = list[i % list.length];
+      const dur = 1.4 + Math.random() * 0.8, del = Math.random() * 0.7;
+      e.style.cssText = "left:" + (3 + Math.random() * 94) + "%;font-size:" + (22 + Math.random() * 14) + "px;--sw:" + (Math.random() * 50 - 25) +
+        "px;--r0:" + (Math.random() * 40 - 20) + "deg;--r1:" + (Math.random() * 120 - 60) + "deg;animation-duration:" + dur + "s;animation-delay:" + del + "s";
+      box.appendChild(e);
+    }
+    document.body.appendChild(box);
+    setTimeout(() => box.remove(), 3200);
   }
 
   /* ---------- question ---------- */
@@ -179,27 +202,56 @@
       const box = h("div", "options");
       const slot = h("div", "reaction");
       const acts = h("div", "actions");
-      let locked = false;
+      const taps = [];
+      let token = 0, noteShown = false, nextShown = false;
       const btns = q.options.map((o) => {
         const b = h("button", "opt");
         b.appendChild(h("span", "t", o.text));
         b.onclick = async () => {
-          if (locked) return;
-          locked = true; haptic();
-          btns.forEach((x) => x.classList.add(x === b ? "chosen" : "faded"));
-          notify(q.stage + ": " + o.text);
-          await react(slot, o.reaction);
-          if (q.note) {
+          if (taps.length && taps[taps.length - 1] === o) return;
+          const first = !taps.length, my = ++token;
+          taps.push(o);
+          btns.forEach((x) => { x.classList.toggle("chosen", x === b); x.classList.toggle("faded", x !== b); });
+          rain(o.rain || q.rain);
+          let bub = slot.querySelector(".bubble");
+          if (first || !bub) {
+            slot.textContent = "";
+            bub = h("div", "bubble");
+            bub.innerHTML = '<span class="dots"><i></i><i></i><i></i></span>';
+            slot.appendChild(bub);
+            await wait(600);
+            if (my !== token) return;
+            bub.textContent = t(o.reaction); bub.style.animation = "none";
+          } else {
+            bub.classList.add("swap-out");
+            await wait(140);
+            if (my !== token) return;
+            bub.textContent = t(o.reaction);
+            bub.classList.remove("swap-out");
+            bub.classList.remove("swap-in"); void bub.offsetWidth; bub.classList.add("swap-in");
+          }
+          if (q.note && !noteShown) {
+            noteShown = true;
             await wait(500);
             const n = h("div", "note", q.note);
             n.appendChild(h("span", "sign", UI.noteSign));
             slot.appendChild(n);
             await wait(700);
           }
-          const nb = h("button", "btn", UI.next);
-          nb.onclick = () => { haptic(); setStep(i + 2); next(); };
-          acts.appendChild(nb);
-          nb.scrollIntoView({ behavior: RM ? "auto" : "smooth", block: "nearest" });
+          if (!nextShown) {
+            nextShown = true;
+            const nb = h("button", "btn", UI.next);
+            nb.onclick = () => {
+              if (nb.disabled) return; nb.disabled = true;
+              const last = taps[taps.length - 1];
+              notify(taps.length === 1 ? q.stage + ": " + t(last.text)
+                : q.stage + ": тыкала " + taps.map((x) => t(x.text)).join(" → ") + ", выбрала → " + t(last.text));
+              state.choices = Object.assign({}, state.choices, { [i]: last.text });
+              setStep(i + 2); next();
+            };
+            acts.appendChild(nb);
+            nb.scrollIntoView({ behavior: RM ? "auto" : "smooth", block: "nearest" });
+          }
         };
         return b;
       });
@@ -223,7 +275,7 @@
         b.appendChild(h("span", "t", o.text));
         b.onclick = async () => {
           if (locked) return;
-          locked = true; haptic();
+          locked = true;
           notify(F.stage + ": " + o.text);
           if (!o.correct) {
             b.classList.add("struck"); b.disabled = true;
@@ -232,8 +284,9 @@
             return;
           }
           btns.forEach((x) => x.classList.add(x === b ? "chosen" : "faded"));
+          bigConfetti();
           await react(slot, o.reaction);
-          await wait(1300);
+          await wait(1800);
           setStep(N + 2);
           reveal(true);
         };
@@ -281,12 +334,14 @@
     let b = inv;
     const r = Math.max(2, Math.round(w * 0.009));
     for (let k = 0; k < 3; k++) b = boxBlur(b, w, hh, r);     // ~gaussian
-    const ink = [20, 33, 61], paper = [246, 241, 231];
+    const ink = [74, 70, 72], paper = [243, 236, 222];
     for (let i = 0; i < n; i++) {
-      let v = b[i] >= 255 ? 255 : Math.min(255, gray[i] * 255 / (255 - b[i]));   // color dodge
-      v = 255 * Math.pow(v / 255, 1.25);                                          // deepen lines
-      v = Math.max(0, Math.min(255, (v - 128) * 1.12 + 128));                     // slight contrast
-      const k = v / 255;
+      const line = b[i] >= 255 ? 255 : Math.min(255, gray[i] * 255 / (255 - b[i]));   // color dodge
+      const tone = 150 + gray[i] * 0.4;                                                // faint tonal wash
+      let v = 0.55 * line + 0.45 * tone;
+      v = 255 * Math.pow(Math.min(255, v) / 255, 1.1);
+      v = Math.min(236, 120 + v * 0.58);                                               // low contrast, no blown whites
+      const k = (v - 120) / 116;
       px[i * 4] = ink[0] + (paper[0] - ink[0]) * k;
       px[i * 4 + 1] = ink[1] + (paper[1] - ink[1]) * k;
       px[i * 4 + 2] = ink[2] + (paper[2] - ink[2]) * k;
@@ -343,20 +398,145 @@
     return { pass, photo: ph };
   }
 
-  function confetti() {
+  function bigConfetti() {
     if (RM) return;
-    const colors = ["#1f7a8c", "#14213d", "#e0a63a", "#f4efe6"];
-    for (let i = 0; i < 26; i++) {
-      const c = document.createElement("i");
-      c.className = "confetti";
-      const s = 5 + Math.random() * 6;
-      c.style.cssText = "left:" + Math.random() * 100 + "vw;width:" + s + "px;height:" + s * (Math.random() > .5 ? 2 : 1) +
-        "px;background:" + colors[i % colors.length] + ";border-radius:" + (Math.random() > .6 ? "50%" : "1px") +
-        ";--dx:" + (Math.random() * 120 - 60) + "px;--rot:" + (Math.random() * 720 - 360) + "deg;animation-duration:" +
-        (3.2 + Math.random() * 2.4) + "s;animation-delay:" + Math.random() * 0.8 + "s";
-      document.body.appendChild(c);
-      setTimeout(() => c.remove(), 7000);
+    const cv = document.createElement("canvas");
+    cv.className = "confetti-cv";
+    const dpr = Math.min(2, window.devicePixelRatio || 1), W = innerWidth, H = innerHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    document.body.appendChild(cv);
+    const ctx = cv.getContext("2d");
+    if (!ctx) { cv.remove(); return; }
+    ctx.scale(dpr, dpr);
+    const cs = getComputedStyle(document.documentElement);
+    const colors = [cs.getPropertyValue("--accent"), cs.getPropertyValue("--ink"), "#e0a63a", "#e8795a", "#f2c9a0", "#7fb8c4", "#fbf8f2"].map((c) => c.trim() || "#e0a63a");
+    const ps = [];
+    for (let i = 0; i < 150; i++) {
+      const side = i % 3, ang = (side === 0 ? -Math.PI / 2 - 0.9 : side === 1 ? -Math.PI / 2 + 0.9 : -Math.PI / 2) + (Math.random() - .5) * 0.9;
+      const sp = (side === 2 ? 11 : 13) + Math.random() * 9;
+      ps.push({
+        x: side === 0 ? W * 0.1 : side === 1 ? W * 0.9 : W / 2, y: H * (side === 2 ? 0.55 : 0.8),
+        vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, w: 6 + Math.random() * 7, h: 9 + Math.random() * 9,
+        rot: Math.random() * 6.28, vr: (Math.random() - .5) * .35, ph: Math.random() * 6.28, vp: .1 + Math.random() * .2,
+        c: colors[i % colors.length], plane: i % 25 === 0
+      });
     }
+    const t0 = performance.now(), DUR = 3500;
+    (function frame(now) {
+      const el = now - t0;
+      if (el > DUR) { cv.remove(); return; }
+      ctx.clearRect(0, 0, W, H);
+      ctx.globalAlpha = el > DUR - 700 ? Math.max(0, (DUR - el) / 700) : 1;
+      for (const p of ps) {
+        p.vx *= 0.985; p.vy = p.vy * 0.985 + 0.32; p.x += p.vx; p.y += p.vy; p.rot += p.vr; p.ph += p.vp;
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.fillStyle = p.c;
+        if (p.plane) {
+          ctx.scale(1.1, 1.1); ctx.beginPath(); ctx.moveTo(-9, 1); ctx.lineTo(10, -7); ctx.lineTo(3, 8); ctx.lineTo(0, 2); ctx.closePath(); ctx.fill();
+        } else {
+          ctx.scale(1, Math.cos(p.ph)); ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+        }
+        ctx.restore();
+      }
+      requestAnimationFrame(frame);
+    })(t0);
+  }
+
+  /* ---------- final photo: pencil sketch drawn, then painted in colour ---------- */
+  const loadImg = (src) => new Promise((res) => {
+    const im = new Image();
+    im.onload = () => res(im.naturalWidth ? im : null);
+    im.onerror = () => res(null);
+    im.src = src;
+  });
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const frames = (dur, fn) => new Promise((res) => {
+    const t0 = performance.now();
+    (function tick(now) {
+      const k = Math.min(1, (now - t0) / dur);
+      fn(k);
+      k < 1 ? requestAnimationFrame(tick) : res();
+    })(t0);
+  });
+
+  function makeBrush() {
+    const s = 64, c = document.createElement("canvas"); c.width = c.height = s;
+    const x = c.getContext("2d"), g = x.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+    g.addColorStop(0, "rgba(255,255,255,1)"); g.addColorStop(.5, "rgba(255,255,255,.85)");
+    g.addColorStop(.8, "rgba(255,255,255,.3)"); g.addColorStop(1, "rgba(255,255,255,0)");
+    x.fillStyle = g; x.fillRect(0, 0, s, s);
+    return c;
+  }
+
+  // sk = sketch (canvas|img) or null, color = img
+  function paintReveal(sk, color) {
+    const sc = Math.min(1, 1200 / color.naturalWidth), W = Math.round(color.naturalWidth * sc), H = Math.round(color.naturalHeight * sc);
+    const mk = () => { const c = document.createElement("canvas"); c.width = W; c.height = H; return c; };
+    const skc = mk(), paint = mk(), mask = mk();
+    const sx = skc.getContext("2d"), px = paint.getContext("2d"), mx = mask.getContext("2d");
+    const brush = makeBrush();
+    const D = Math.hypot(W, H);
+
+    const drawSketch = (k) => {                       // diagonal hatch-like wipes, staggered per band
+      sx.clearRect(0, 0, W, H);
+      const bands = 16, th = D / bands * 1.7;
+      sx.save(); sx.beginPath();
+      for (let b = 0; b < bands; b++) {
+        const kk = Math.max(0, Math.min(1, k * 1.5 - b / bands * .5));
+        if (kk <= 0) continue;
+        const off = (b + .5) / bands * D - D / 2;
+        const ux = .7071, uy = -.7071, nx = .7071, ny = .7071, cx = W / 2 + nx * off, cy = H / 2 + ny * off;
+        const L = D / 2, from = b % 2 ? L : -L, to = b % 2 ? -L : L, cur = from + (to - from) * kk, p0 = Math.min(from, cur), p1 = Math.max(from, cur);
+        sx.moveTo(cx + ux * p0 - nx * th / 2, cy + uy * p0 - ny * th / 2);
+        sx.lineTo(cx + ux * p1 - nx * th / 2, cy + uy * p1 - ny * th / 2);
+        sx.lineTo(cx + ux * p1 + nx * th / 2, cy + uy * p1 + ny * th / 2);
+        sx.lineTo(cx + ux * p0 + nx * th / 2, cy + uy * p0 + ny * th / 2);
+        sx.closePath();
+      }
+      sx.clip(); sx.drawImage(sk, 0, 0, W, H); sx.restore();
+    };
+
+    // stroke plans: wavy horizontal sweeps (guarantee coverage) + a few diagonal ones
+    const strokes = [], rows = 9, R = H / rows * 0.95;
+    for (let r = 0; r < rows; r++) {
+      const y = (r + .5) / rows * H, dir = Math.random() > .5 ? 1 : -1, amp = rnd(.2, .6) * R, f = rnd(1, 2.2), ph = rnd(0, 6.28);
+      strokes.push({ R, n: 46, pt: (u) => [(dir > 0 ? u : 1 - u) * (W * 1.2) - W * .1, y + Math.sin(u * f * 6.28 + ph) * amp] });
+    }
+    for (let d = 0; d < 4; d++) {
+      const x0 = rnd(-.1, .6) * W, y0 = rnd(-.1, .3) * H, x1 = x0 + rnd(.3, .7) * W, y1 = y0 + rnd(.7, 1.1) * H, bend = rnd(-.2, .2) * W;
+      strokes.push({ R: R * .9, n: 34, pt: (u) => [x0 + (x1 - x0) * u + Math.sin(u * 3.14) * bend, y0 + (y1 - y0) * u] });
+    }
+    strokes.sort(() => Math.random() - .5);
+    const T = strokes.length;
+    strokes.forEach((s, i) => { s.s = i / T * .62; s.e = s.s + .38; s.done = 0; });
+
+    const dab = (s, u) => {
+      const p = s.pt(u), q = s.pt(Math.min(1, u + .02)), ang = Math.atan2(q[1] - p[1], q[0] - p[0]), rr = s.R * rnd(.8, 1.35);
+      mx.save(); mx.globalAlpha = rnd(.55, .95); mx.translate(p[0], p[1] + rnd(-.25, .25) * s.R); mx.rotate(ang);
+      mx.scale(rnd(1.3, 2.1), 1); mx.drawImage(brush, -rr, -rr, rr * 2, rr * 2); mx.restore();
+    };
+    const compose = () => {
+      px.globalCompositeOperation = "source-over"; px.clearRect(0, 0, W, H);
+      px.drawImage(mask, 0, 0);
+      px.globalCompositeOperation = "source-in"; px.drawImage(color, 0, 0, W, H);
+      px.globalCompositeOperation = "source-over";
+    };
+    const showAll = () => { px.globalCompositeOperation = "source-over"; px.clearRect(0, 0, W, H); px.drawImage(color, 0, 0, W, H); };
+    if (sk) drawSketch(0);
+    return {
+      canvases: sk ? [skc, paint] : [paint],
+      async play(dSketch, dPaint) {
+        if (RM) { if (sk) drawSketch(1); showAll(); return; }
+        if (sk) { await frames(dSketch, (k) => drawSketch(1 - Math.pow(1 - k, 2))); drawSketch(1); await wait(250); }
+        await frames(dPaint, (k) => {
+          for (const s of strokes) {
+            const p = Math.max(0, Math.min(1, (k - s.s) / (s.e - s.s))), want = Math.floor(p * s.n);
+            while (s.done < want) { s.done++; dab(s, s.done / s.n); }
+          }
+          compose();
+        });
+        showAll();
+      }
+    };
   }
 
   /* ---------- reveal ---------- */
@@ -374,44 +554,28 @@
     inner.append(wrap, letter);
     root.appendChild(inner);
 
-    // load photo
-    const img = new Image();
-    let ok = false;
-    try {
-      img.src = F.sketchPhoto;
-      if (img.decode) await img.decode(); else await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
-      ok = img.naturalWidth > 0;
-    } catch (e) { ok = false; }
-
+    // load photo (+ optional hand-made sketch)
+    const color = await loadImg(F.sketchPhoto);
+    const ok = !!color;
+    let rv = null;
     const ps = h("div", "photo-stage");
-    let color;
     if (ok) {
-      let sk = null;
-      try { sk = makeSketch(img); } catch (e) { sk = null; }
-      color = new Image(); color.src = F.sketchPhoto; color.alt = "";
-      if (sk) ps.append(sk, color);
-      else { ps.append(color); color.style.webkitMaskImage = color.style.maskImage = "none"; }
+      let sk = await loadImg(F.sketchImage || "img/final_sketch.jpg");
+      if (!sk) { try { sk = makeSketch(color); } catch (e) { sk = null; } }
+      try {
+        rv = paintReveal(sk, color);
+        rv.canvases.forEach((c) => ps.appendChild(c));
+      } catch (e) {
+        rv = null; ps.append(color);
+      }
     }
     document.body.append(root, ps);
     root.style.animation = "none";
     stage.style.visibility = "hidden";
 
-    // sketch -> colour sweep
+    // pencil is drawn, then colour is painted in
     await wait(900);
-    if (color) {
-      if (RM) color.style.setProperty("--p", "140%");
-      else {
-        const dur = 3500, t0 = performance.now();
-        await new Promise((res) => {
-          (function tick(now) {
-            const k = Math.min(1, (now - t0) / dur), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
-            color.style.setProperty("--p", (-20 + e * 160) + "%");
-            k < 1 ? requestAnimationFrame(tick) : res();
-          })(t0);
-        });
-      }
-    }
-    haptic("success");
+    if (rv) await rv.play(1500, 3000);
     await wait(700);
 
     // shrink the photo into the stub of the boarding pass
@@ -425,7 +589,7 @@
     }
     if (ok) built.photo.style.backgroundImage = "url(" + F.sketchPhoto + ")";
     ps.remove();
-    confetti();
+    bigConfetti();
     await wait(800);
 
     // letter, line by line
