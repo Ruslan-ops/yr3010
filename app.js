@@ -616,32 +616,35 @@
     return prePromise;
   }
 
-  // sk = sketch (canvas|img) or null, color = img
+  // sk = sketch (canvas|img) or null, color = img. One visible canvas: sketch first, colour dabbed in incrementally.
   function paintReveal(sk, color) {
-    const sc = Math.min(1, 1000 / color.naturalWidth), W = Math.round(color.naturalWidth * sc), H = Math.round(color.naturalHeight * sc);
-    const mk = () => { const c = document.createElement("canvas"); c.width = W; c.height = H; return c; };
-    const skc = mk(), paint = mk(), mask = mk();
-    const sx = skc.getContext("2d"), px = paint.getContext("2d"), mx = mask.getContext("2d");
-    const brush = makeBrush();
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    const boxW = Math.min(innerWidth, innerHeight * 4 / 3);
+    const W = Math.max(200, Math.min(1000, color.naturalWidth, Math.round(boxW * dpr))), H = Math.round(W * color.naturalHeight / color.naturalWidth);
+    const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+    const px = cv.getContext("2d");
+    const src = document.createElement("canvas"); src.width = W; src.height = H;   // colour image at canvas size, used as pattern
+    src.getContext("2d").drawImage(color, 0, 0, W, H);
+    const pat = px.createPattern(src, "no-repeat");
     const D = Math.hypot(W, H);
 
     const drawSketch = (k) => {                       // diagonal hatch-like wipes, staggered per band
-      sx.clearRect(0, 0, W, H);
+      px.clearRect(0, 0, W, H);
       const bands = 16, th = D / bands * 1.7;
-      sx.save(); sx.beginPath();
+      px.save(); px.beginPath();
       for (let b = 0; b < bands; b++) {
         const kk = Math.max(0, Math.min(1, k * 1.5 - b / bands * .5));
         if (kk <= 0) continue;
         const off = (b + .5) / bands * D - D / 2;
         const ux = .7071, uy = -.7071, nx = .7071, ny = .7071, cx = W / 2 + nx * off, cy = H / 2 + ny * off;
         const L = D / 2, from = b % 2 ? L : -L, to = b % 2 ? -L : L, cur = from + (to - from) * kk, p0 = Math.min(from, cur), p1 = Math.max(from, cur);
-        sx.moveTo(cx + ux * p0 - nx * th / 2, cy + uy * p0 - ny * th / 2);
-        sx.lineTo(cx + ux * p1 - nx * th / 2, cy + uy * p1 - ny * th / 2);
-        sx.lineTo(cx + ux * p1 + nx * th / 2, cy + uy * p1 + ny * th / 2);
-        sx.lineTo(cx + ux * p0 + nx * th / 2, cy + uy * p0 + ny * th / 2);
-        sx.closePath();
+        px.moveTo(cx + ux * p0 - nx * th / 2, cy + uy * p0 - ny * th / 2);
+        px.lineTo(cx + ux * p1 - nx * th / 2, cy + uy * p1 - ny * th / 2);
+        px.lineTo(cx + ux * p1 + nx * th / 2, cy + uy * p1 + ny * th / 2);
+        px.lineTo(cx + ux * p0 + nx * th / 2, cy + uy * p0 + ny * th / 2);
+        px.closePath();
       }
-      sx.clip(); sx.drawImage(sk, 0, 0, W, H); sx.restore();
+      px.clip(); if (sk) px.drawImage(sk, 0, 0, W, H); px.restore();
     };
 
     // stroke plans: wavy horizontal sweeps (guarantee coverage) + a few diagonal ones
@@ -658,32 +661,38 @@
     const T = strokes.length;
     strokes.forEach((s, i) => { s.s = i / T * .62; s.e = s.s + .38; s.done = 0; });
 
+    // soft dab = 3 concentric low-alpha ellipses filled with the colour pattern (no transforms, no image draws)
     const dab = (s, u) => {
       const p = s.pt(u), q = s.pt(Math.min(1, u + .02)), ang = Math.atan2(q[1] - p[1], q[0] - p[0]), rr = s.R * rnd(.8, 1.35);
-      mx.save(); mx.globalAlpha = rnd(.55, .95); mx.translate(p[0], p[1] + rnd(-.25, .25) * s.R); mx.rotate(ang);
-      mx.scale(rnd(1.3, 2.1), 1); mx.drawImage(brush, -rr, -rr, rr * 2, rr * 2); mx.restore();
+      const x = p[0], y = p[1] + rnd(-.25, .25) * s.R, sx = rnd(1.3, 2.1);
+      px.globalAlpha = rnd(.55, .95) * .42;
+      for (let i = 0; i < 3; i++) {
+        const k = 1 - i * .27;
+        px.beginPath(); px.ellipse(x, y, rr * sx * k, rr * k, ang, 0, 6.2832); px.fill();
+      }
     };
-    const compose = () => {
-      px.globalCompositeOperation = "source-over"; px.clearRect(0, 0, W, H);
-      px.drawImage(mask, 0, 0);
-      px.globalCompositeOperation = "source-in"; px.drawImage(color, 0, 0, W, H);
-      px.globalCompositeOperation = "source-over";
-    };
-    const showAll = () => { px.globalCompositeOperation = "source-over"; px.clearRect(0, 0, W, H); px.drawImage(color, 0, 0, W, H); };
     if (sk) drawSketch(0);
     return {
-      canvases: sk ? [skc, paint] : [paint],
-      async play(dSketch, dPaint) {
-        if (RM) { if (sk) drawSketch(1); showAll(); return; }
+      canvas: cv,
+      async play(dSketch, dPaint, showFull) {
+        if (RM) { if (sk) drawSketch(1); showFull(); return; }
         if (sk) { await frames(dSketch, (k) => drawSketch(1 - Math.pow(1 - k, 2))); drawSketch(1); await wait(250); }
+        px.fillStyle = pat;
+        let cap = 12;
         await frames(dPaint, (k) => {
+          const t0 = performance.now(); let n = 0;
           for (const s of strokes) {
             const p = Math.max(0, Math.min(1, (k - s.s) / (s.e - s.s))), want = Math.floor(p * s.n);
-            while (s.done < want) { s.done++; dab(s, s.done / s.n); }
+            while (s.done < want && n < cap) {
+              s.done++; dab(s, s.done / s.n); n++;
+              if (!(n & 3) && performance.now() - t0 > 4) { cap = Math.max(4, n); break; }
+            }
           }
-          compose();
+          if (performance.now() - t0 < 2 && cap < 25) cap++;
+          px.globalAlpha = 1;
         });
-        showAll();
+        showFull();   // single CSS crossfade to the full colour <img>
+        await wait(600);
       }
     };
   }
@@ -708,27 +717,34 @@
     const color = pre.color, ok = !!color;
     const rv = pre.rv;
     const ps = h("div", "photo-stage");
-    if (ok) { if (rv) rv.canvases.forEach((c) => ps.appendChild(c)); else ps.append(color); }
+    const pbox = h("div", "pbox");   // 4:3 box (same ratio as the stub photo) -> transform-only FLIP
+    {
+      const bw = Math.min(innerWidth, innerHeight * 4 / 3), bh = bw * 3 / 4;
+      Object.assign(pbox.style, { width: bw + "px", height: bh + "px", left: (innerWidth - bw) / 2 + "px", top: (innerHeight - bh) / 2 + "px" });
+    }
+    if (ok) { if (rv) pbox.append(rv.canvas); color.classList.add("full"); if (!rv) color.classList.add("on"); pbox.append(color); ps.append(pbox); }
     document.body.append(root, ps);
     root.style.animation = "none";
     stage.style.visibility = "hidden";
 
     // pencil is drawn, then colour is painted in
     await wait(900);
-    if (rv) await rv.play(1500, 3000);
+    if (rv) await rv.play(1500, 3000, () => color.classList.add("on"));
     await wait(700);
 
     // shrink the photo into the stub of the boarding pass
     wrap.classList.add("on");
     const r = built.photo.getBoundingClientRect();
     if (ok && !RM) {
-      ps.classList.add("moving");
+      const b0 = pbox.getBoundingClientRect(), sc = r.width / b0.width;
+      pbox.style.willChange = "transform";
       void ps.offsetWidth;
-      Object.assign(ps.style, { top: r.top + "px", left: r.left + "px", width: r.width + "px", height: r.height + "px", borderRadius: "8px" });
+      ps.classList.add("moving");
+      pbox.style.transform = "translate3d(" + (r.left - b0.left) + "px," + (r.top - b0.top) + "px,0) scale(" + sc + ")";
       await wait(1050);
     }
     if (ok) built.photo.style.backgroundImage = "url(" + F.sketchPhoto + ")";
-    if (rv) rv.canvases.forEach((cv) => { cv.width = cv.height = 0; });
+    if (rv) rv.canvas.width = rv.canvas.height = 0;
     ps.remove();
     bigConfetti();
     await wait(800);
