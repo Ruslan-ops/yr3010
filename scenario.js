@@ -1,7 +1,7 @@
 // ALL user-facing texts live here. {name} is replaced with CONFIG.PASSENGER.
 window.SCENARIO = {
   ui: {
-    brand: "Yana Routes",
+    brand: "Пашинские авиалинии",
     brandSub: "",
     unknown: "???",
     next: "Дальше",

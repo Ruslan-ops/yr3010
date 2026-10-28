@@ -37,6 +37,8 @@ input, textarea, select { font-size: 16px; }
 .brand { display: flex; align-items: baseline; gap: 10px; margin-bottom: 18px; }
 .brand span { font-weight: 800; letter-spacing: .02em; font-size: 15px; }
 .brand small { color: var(--ink-soft); font-size: 11px; letter-spacing: .02em; }
+.brand small:empty { display: none; }
+.brand span { white-space: nowrap; }
 
 .route { position: relative; height: 38px; margin: 0 10px; }
 .route-line { position: absolute; left: 0; right: 0; top: 11px; height: 2px; background: var(--line); border-radius: 2px; overflow: hidden; }
@@ -143,9 +145,9 @@ h2 { font-size: 25px; }
 .pass-wrap { opacity: 0; transition: opacity .9s ease; }
 .pass-wrap.on { opacity: 1; }
 .pass { position: relative; background: var(--paper-2); border-radius: 18px; box-shadow: 0 18px 40px rgba(20, 33, 61, .16), 0 2px 0 rgba(20, 33, 61, .04); overflow: hidden; }
-.pass-head { background: var(--ink); color: var(--paper-2); padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; }
-.pass-head b { font-weight: 800; letter-spacing: .02em; }
-.pass-head span { font: 400 11px "JetBrains Mono", monospace; letter-spacing: .16em; opacity: .75; }
+.pass-head { background: var(--ink); color: var(--paper-2); padding: 14px 18px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.pass-head b { font-weight: 800; letter-spacing: .02em; font-size: 17px; line-height: 1.2; }
+.pass-head span { font: 400 10px "JetBrains Mono", monospace; letter-spacing: .16em; opacity: .75; }
 .pass-main { padding: 18px 18px 20px; }
 .codes { display: flex; align-items: center; justify-content: space-between; font-family: "JetBrains Mono", monospace; font-weight: 600; font-size: 44px; letter-spacing: -.02em; line-height: 1; }
 .codes svg { width: 34px; height: 34px; color: var(--accent); flex: none; }
