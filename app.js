@@ -22,7 +22,8 @@
   /* ---------- storage ---------- */
   function load() { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } }
   function save(o) { try { localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) {} }
-  if (params.get("reset")) { try { localStorage.removeItem(KEY); } catch (e) {} }
+  const startParam = window.Telegram?.WebApp?.initDataUnsafe?.start_param || "";
+  if (params.get("reset") || startParam === "reset") { try { localStorage.removeItem(KEY); } catch (e) {} }
   let state = Object.assign({ step: 0 }, load());   // step: 0 intro, 1..N questions, N+1 final, N+2 reveal
   const setStep = (s) => { state.step = s; save(state); };
 
