@@ -51,7 +51,7 @@ input, textarea, select { font-size: 16px; }
 .route-dots i.done { background: var(--accent); border-color: var(--accent); }
 .plane {
   position: absolute; top: 0; left: 0; width: 24px; height: 24px; margin-left: -12px; color: var(--ink);
-  transform: rotate(45deg); transition: left .7s cubic-bezier(.45,.05,.2,1); filter: drop-shadow(0 2px 0 var(--paper));
+  transition: left .7s cubic-bezier(.45,.05,.2,1); filter: drop-shadow(0 2px 0 var(--paper));
 }
 .route-ends { position: absolute; left: -10px; right: -10px; top: 24px; display: flex; justify-content: space-between; font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: .08em; color: var(--ink-soft); }
 
@@ -63,7 +63,7 @@ input, textarea, select { font-size: 16px; }
 @keyframes slideIn { from { opacity: 0; transform: translateX(46px); } to { opacity: 1; transform: none; } }
 @keyframes slideOut { to { opacity: 0; transform: translateX(-46px); } }
 .plane.fly { animation: bob .7s cubic-bezier(.45,.05,.2,1); }
-@keyframes bob { 0%,100% { transform: translateY(0) rotate(45deg); } 40% { transform: translateY(-9px) rotate(32deg) scale(1.15); } 75% { transform: translateY(-2px) rotate(50deg); } }
+@keyframes bob { 0%,100% { transform: translateY(0); } 40% { transform: translateY(-9px) rotate(-12deg) scale(1.15); } 75% { transform: translateY(-2px) rotate(4deg); } }
 @keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 @keyframes fall { to { opacity: 0; transform: translateY(-6px); } }
 
@@ -196,17 +196,27 @@ h2 { font-size: 25px; }
 @keyframes crewIn { from { opacity: 0; transform: translateY(10px) rotate(-2deg) scale(.96); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .crew { animation: none; } }
 
-/* re-choice swap, emoji rain, confetti canvas */
+/* re-choice swap, option effects, confetti canvas */
 .bubble.swap-out { opacity: 0; transform: translateY(6px) scale(.97); transition: opacity .14s, transform .14s; animation: none; }
 .bubble.swap-in { animation: swapIn .3s var(--ease) both; }
 @keyframes swapIn { from { opacity: 0; transform: translateY(-8px) scale(.96); } to { opacity: 1; transform: none; } }
-.rain { position: fixed; inset: 0; z-index: 80; pointer-events: none; overflow: hidden; }
-.rain i { position: absolute; top: -48px; font-style: normal; line-height: 1; will-change: transform; animation: rainFall cubic-bezier(.4,.1,.7,1) both; }
-@keyframes rainFall {
-  0% { transform: translate3d(0, 0, 0) rotate(var(--r0)); opacity: 0; }
-  8% { opacity: 1; }
-  50% { transform: translate3d(var(--sw), 55vh, 0) rotate(calc(var(--r0) + var(--r1) * .5)); }
-  90% { opacity: 1; }
-  100% { transform: translate3d(calc(var(--sw) * -.6), 112vh, 0) rotate(var(--r1)); opacity: 0; }
-}
+.fx { position: fixed; inset: 0; z-index: 80; pointer-events: none; overflow: hidden; }
+.fx i { position: absolute; font-style: normal; line-height: 1; will-change: transform, opacity; }
 .confetti-cv { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 90; pointer-events: none; }
+
+/* ---------- verification stamp ---------- */
+.stamp-wrap { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; pointer-events: none; transition: opacity .45s ease; }
+.stamp-wrap.out { opacity: 0; }
+.stamp {
+  --ok: #2f8f5b; color: var(--ok); text-align: center; padding: 14px 22px 12px;
+  border: 5px solid var(--ok); border-radius: 16px; outline: 2px solid var(--ok); outline-offset: 4px;
+  background: rgba(244, 239, 230, .88); font-family: "JetBrains Mono", monospace; font-weight: 800; text-transform: uppercase;
+  mix-blend-mode: multiply; filter: url(#inkRough); opacity: .92;
+  transform: rotate(-8deg); animation: stampSlam .5s cubic-bezier(.2, .9, .25, 1) both, stampShake .35s .5s linear both;
+}
+.stamp-main { font-size: 24px; letter-spacing: .06em; line-height: 1.1; }
+.stamp-sub { margin-top: 8px; padding-top: 8px; border-top: 3px solid var(--ok); font-size: 20px; letter-spacing: .2em; }
+@keyframes stampSlam { 0% { transform: rotate(-14deg) scale(2.2); opacity: 0; } 55% { opacity: .95; } 78% { transform: rotate(-7deg) scale(.94); } 100% { transform: rotate(-8deg) scale(1); opacity: .92; } }
+@keyframes stampShake { 0%, 100% { translate: 0 0; } 20% { translate: -4px 3px; } 40% { translate: 4px -3px; } 60% { translate: -2px 2px; } 80% { translate: 2px -1px; } }
+@keyframes stampFade { from { opacity: 0; transform: rotate(-8deg); } to { opacity: .92; transform: rotate(-8deg); } }
+@media (prefers-reduced-motion: reduce) { .stamp { animation: stampFade .3s both; } }

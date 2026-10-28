@@ -168,28 +168,119 @@
     });
   }
 
-  /* ---------- emoji rain ---------- */
+  /* ---------- per-option effects ---------- */
   const graphemes = (str) => {
     try { if (window.Intl && Intl.Segmenter) return Array.from(new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(str), (x) => x.segment); } catch (e) {}
     return Array.from(str);
   };
-  function rain(str) {
-    if (RM || !str) return;
-    const list = graphemes(str).filter((g) => g.trim());
+  function runFx(fx, btn, slot) {
+    if (RM || !fx || !fx.emoji) return;
+    const list = graphemes(fx.emoji).filter((g) => g.trim());
     if (!list.length) return;
+    const W = window.innerWidth, H = window.innerHeight, R = Math.random;
     const box = document.createElement("div");
-    box.className = "rain";
-    const n = 18 + Math.floor(Math.random() * 7);
-    for (let i = 0; i < n; i++) {
+    box.className = "fx";
+    const mk = (txt, size) => {
       const e = document.createElement("i");
-      e.textContent = list[i % list.length];
-      const dur = 1.4 + Math.random() * 0.8, del = Math.random() * 0.7;
-      e.style.cssText = "left:" + (3 + Math.random() * 94) + "%;font-size:" + (22 + Math.random() * 14) + "px;--sw:" + (Math.random() * 50 - 25) +
-        "px;--r0:" + (Math.random() * 40 - 20) + "deg;--r1:" + (Math.random() * 120 - 60) + "deg;animation-duration:" + dur + "s;animation-delay:" + del + "s";
-      box.appendChild(e);
-    }
+      e.textContent = txt; e.style.fontSize = size + "px";
+      box.appendChild(e); return e;
+    };
+    const go = (e, frames, o) => e.animate(frames, Object.assign({ fill: "both", easing: "linear" }, o));
+    const br = btn ? btn.getBoundingClientRect() : { left: W / 2, top: H / 2, width: 0, height: 0 };
+    const sr = slot ? slot.getBoundingClientRect() : br;
+    let life = 3200;
+    const type = fx.type;
+    if (type === "count") {
+      const n = fx.count || list.length;
+      const size = n > 6 ? 30 : 40, pad = 28, step = (W - pad * 2 - size) / Math.max(n - 1, 1);
+      const ground = H - 120;
+      for (let i = 0; i < n; i++) {
+        const e = mk(list[i % list.length], size);
+        const x = n === 1 ? W / 2 - size / 2 : pad + step * i + (R() * 8 - 4);
+        const row = n > 6 ? (i % 2) * 34 : 0, y = ground - row + (R() * 10 - 5);
+        e.style.left = x + "px"; e.style.top = "0px";
+        const rot = R() * 30 - 15, d = i * 260;
+        go(e, [
+          { transform: "translate3d(0,-60px,0) rotate(" + (rot - 40) + "deg)", opacity: 0, offset: 0 },
+          { transform: "translate3d(0,-60px,0) rotate(" + (rot - 40) + "deg)", opacity: 1, offset: .01 },
+          { transform: "translate3d(0," + y + "px,0) rotate(" + rot + "deg)", offset: .5, easing: "cubic-bezier(.5,0,1,.6)" },
+          { transform: "translate3d(0," + (y - 26) + "px,0) rotate(" + rot + "deg)", offset: .66, easing: "cubic-bezier(0,.4,.5,1)" },
+          { transform: "translate3d(0," + y + "px,0) rotate(" + rot + "deg)", offset: .8, easing: "cubic-bezier(.5,0,1,.6)" },
+          { transform: "translate3d(0," + (y - 7) + "px,0) rotate(" + rot + "deg)", offset: .88 },
+          { transform: "translate3d(0," + y + "px,0) rotate(" + rot + "deg)", opacity: 1, offset: .93 },
+          { transform: "translate3d(0," + y + "px,0) rotate(" + rot + "deg)", opacity: 0, offset: 1 }
+        ], { duration: 2000, delay: d });
+      }
+      life = 2000 + n * 260 + 200;
+    } else if (type === "rain") {
+      for (let i = 0; i < 20; i++) {
+        const e = mk(list[i % list.length], 22 + R() * 14);
+        e.style.left = (3 + R() * 94) + "%"; e.style.top = "-48px";
+        const sw = R() * 50 - 25, r = R() * 120 - 60;
+        go(e, [
+          { transform: "translate3d(0,0,0) rotate(" + (R() * 40 - 20) + "deg)", opacity: 0 },
+          { opacity: 1, offset: .08 },
+          { opacity: 1, offset: .9 },
+          { transform: "translate3d(" + sw + "px," + (H + 60) + "px,0) rotate(" + r + "deg)", opacity: 0 }
+        ], { duration: 1400 + R() * 800, delay: R() * 700, easing: "cubic-bezier(.4,.1,.7,1)" });
+      }
+    } else if (type === "burst") {
+      const n = 8 + Math.floor(R() * 5), cx = br.left + br.width / 2, cy = br.top + br.height / 2;
+      for (let i = 0; i < n; i++) {
+        const e = mk(list[i % list.length], 24 + R() * 10);
+        e.style.left = cx - 14 + "px"; e.style.top = cy - 14 + "px";
+        const ang = -Math.PI / 2 + (R() - .5) * Math.PI * 1.7, v = 90 + R() * 110;
+        const dx = Math.cos(ang) * v, dy = Math.sin(ang) * v, r = R() * 160 - 80;
+        go(e, [
+          { transform: "translate3d(0,0,0) scale(.4)", opacity: 1 },
+          { transform: "translate3d(" + dx * .6 + "px," + (dy * .9 - 10) + "px,0) rotate(" + r * .5 + "deg) scale(1.1)", opacity: 1, offset: .4, easing: "ease-out" },
+          { transform: "translate3d(" + dx + "px," + (dy + 150) + "px,0) rotate(" + r + "deg) scale(.9)", opacity: 0 }
+        ], { duration: 950 + R() * 150, easing: "ease-in" });
+      }
+      life = 1400;
+    } else if (type === "float") {
+      const n = 5 + Math.floor(R() * 3);
+      for (let i = 0; i < n; i++) {
+        const e = mk(list[i % list.length], 24 + R() * 10);
+        const x = br.left + R() * br.width * .9;
+        e.style.left = x + "px"; e.style.top = Math.min(br.top + br.height, H - 40) + "px";
+        const s1 = R() * 24 - 12, s2 = R() * 30 - 15, rise = Math.min(240, br.top + br.height - 40) + R() * 20;
+        go(e, [
+          { transform: "translate3d(0,0,0) scale(.7)", opacity: 0 },
+          { transform: "translate3d(" + s1 + "px," + -rise * .3 + "px,0) scale(1)", opacity: .95, offset: .2 },
+          { transform: "translate3d(" + -s1 + "px," + -rise * .65 + "px,0) rotate(" + s2 + "deg)", opacity: .9, offset: .6 },
+          { transform: "translate3d(" + s2 + "px," + -rise + "px,0) rotate(" + -s2 + "deg)", opacity: 0 }
+        ], { duration: 2200, delay: i * 190, easing: "ease-in-out" });
+      }
+      life = 2200 + n * 190 + 100;
+    } else if (type === "single") {
+      const e = mk(list[0], 72);
+      e.style.left = (W - 110) + "px";
+      e.style.top = Math.max(60, Math.min(H - 120, sr.top - 20)) + "px";
+      go(e, [
+        { transform: "scale(0) rotate(0deg)", opacity: 0, offset: 0 },
+        { transform: "scale(1.15) rotate(-8deg)", opacity: 1, offset: .25, easing: "ease-out" },
+        { transform: "scale(1) rotate(6deg)", offset: .4 },
+        { transform: "scale(1) rotate(-4deg)", offset: .55 },
+        { transform: "scale(1) rotate(0deg)", opacity: 1, offset: .8 },
+        { transform: "scale(.9) rotate(0deg)", opacity: 0, offset: 1 }
+      ], { duration: 1600 });
+      life = 1800;
+    } else if (type === "drive") {
+      const e = mk(list[0], 56);
+      e.style.left = "0px"; e.style.top = H * .65 + "px";
+      const p = (x, y) => "translate3d(" + x + "px," + y + "px,0) scaleX(-1)";
+      go(e, [
+        { transform: p(-80, 0), opacity: 1, offset: 0 },
+        { transform: p(W * .25, -5), offset: .25 },
+        { transform: p(W * .5, 2), offset: .5 },
+        { transform: p(W * .75, -5), offset: .75 },
+        { transform: p(W + 80, 0), opacity: 1, offset: 1 }
+      ], { duration: 1600, easing: "ease-in-out" });
+      life = 1800;
+    } else return;
     document.body.appendChild(box);
-    setTimeout(() => box.remove(), 3200);
+    setTimeout(() => box.remove(), life + 300);
   }
 
   /* ---------- question ---------- */
@@ -213,7 +304,7 @@
           const first = !taps.length, my = ++token;
           taps.push(o);
           btns.forEach((x) => { x.classList.toggle("chosen", x === b); x.classList.toggle("faded", x !== b); });
-          rain(o.rain || q.rain);
+          runFx(o.fx, b, slot);
           let bub = slot.querySelector(".bubble");
           if (first || !bub) {
             slot.textContent = "";
@@ -286,8 +377,9 @@
           }
           btns.forEach((x) => x.classList.add(x === b ? "chosen" : "faded"));
           bigConfetti();
+          const stamped = stampVerified();
           await react(slot, o.reaction);
-          await wait(1800);
+          await stamped;
           setStep(N + 2);
           reveal(true);
         };
@@ -397,6 +489,28 @@
     stub.append(ph, bc);
     pass.append(head, main, tear, stub);
     return { pass, photo: ph };
+  }
+
+  /* passport-control "verification passed" stamp; resolves after it has faded */
+  function stampVerified() {
+    const U = S.ui || {};
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    if (!U.verified) return wait(1800);
+    const NS = "http://www.w3.org/2000/svg";
+    const wrap = h("div", "stamp-wrap");
+    const st = h("div", "stamp");
+    st.appendChild(h("div", "stamp-main", U.verified));
+    if (U.verifiedSub) st.appendChild(h("div", "stamp-sub", U.verifiedSub));
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("width", "0"); svg.setAttribute("height", "0"); svg.setAttribute("aria-hidden", "true");
+    svg.style.position = "absolute";
+    svg.innerHTML = '<filter id="inkRough" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.2"/></filter>';
+    wrap.append(svg, st);
+    document.body.appendChild(wrap);
+    return sleep(1900).then(() => {
+      wrap.classList.add("out");
+      return sleep(450).then(() => wrap.remove());
+    });
   }
 
   function bigConfetti() {
