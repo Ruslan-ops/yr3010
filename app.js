@@ -185,7 +185,7 @@
       e.textContent = txt; e.style.fontSize = size + "px";
       box.appendChild(e); return e;
     };
-    const go = (e, frames, o) => e.animate(frames, Object.assign({ fill: "both", easing: "linear" }, o));
+    const go = (e, frames, o) => { e.style.willChange = "transform, opacity"; const an = e.animate(frames, Object.assign({ fill: "both", easing: "linear" }, o)); an.onfinish = () => { e.style.willChange = "auto"; e.style.visibility = "hidden"; }; return an; };
     const br = btn ? btn.getBoundingClientRect() : { left: W / 2, top: H / 2, width: 0, height: 0 };
     const sr = slot ? slot.getBoundingClientRect() : br;
     let life = 3200;
@@ -327,7 +327,8 @@
             await wait(500);
             const n = h("div", "note", q.note);
             n.appendChild(h("span", "sign", UI.noteSign));
-            slot.appendChild(n);
+            if (!fontsOK) { n.style.visibility = "hidden"; slot.appendChild(n); await noteFontReady(); n.style.visibility = ""; }
+            else slot.appendChild(n);
             await wait(700);
           }
           if (!nextShown) {
@@ -351,6 +352,15 @@
       el.append(box, slot, acts);
     });
   }
+
+  /* ---------- fonts: load before first use, no fallback flash ---------- */
+  const FONT_SPECS = ["500 20px Caveat", "700 20px Caveat", "400 14px Manrope", "500 14px Manrope", "600 14px Manrope", "800 14px Manrope", "400 12px 'JetBrains Mono'", "600 12px 'JetBrains Mono'"];
+  let fontsOK = false, fontsPromise = null;
+  function fontsReady() {
+    if (!document.fonts || !document.fonts.load) { fontsOK = true; return Promise.resolve(); }
+    return (fontsPromise = fontsPromise || Promise.all(FONT_SPECS.map((f) => document.fonts.load(f, "Абв Abc").catch(() => {}))).then(() => { fontsOK = true; }));
+  }
+  const noteFontReady = () => fontsOK ? Promise.resolve() : Promise.race([fontsReady(), new Promise((r) => setTimeout(r, 1500))]);
 
   /* ---------- final choice ---------- */
   function renderFinal() {
@@ -380,6 +390,8 @@
           const stamped = stampVerified();
           await react(slot, o.reaction);
           await stamped;
+          // stamp stays on screen (never a blank screen) until the photo is ready, max ~8s
+          if (!preDone) await Promise.race([prepareReveal(), new Promise((r) => setTimeout(r, 8000))]);
           setStep(N + 2);
           reveal(true);
         };
@@ -413,7 +425,7 @@
   }
 
   function makeSketch(img) {
-    const max = 1200, sc = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+    const max = 1000, sc = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
     const w = Math.round(img.naturalWidth * sc), hh = Math.round(img.naturalHeight * sc);
     const cv = document.createElement("canvas"); cv.width = w; cv.height = hh;
     const ctx = cv.getContext("2d");
@@ -496,16 +508,11 @@
     const U = S.ui || {};
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     if (!U.verified) return wait(1800);
-    const NS = "http://www.w3.org/2000/svg";
     const wrap = h("div", "stamp-wrap");
     const st = h("div", "stamp");
     st.appendChild(h("div", "stamp-main", U.verified));
     if (U.verifiedSub) st.appendChild(h("div", "stamp-sub", U.verifiedSub));
-    const svg = document.createElementNS(NS, "svg");
-    svg.setAttribute("width", "0"); svg.setAttribute("height", "0"); svg.setAttribute("aria-hidden", "true");
-    svg.style.position = "absolute";
-    svg.innerHTML = '<filter id="inkRough" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.2"/></filter>';
-    wrap.append(svg, st);
+    wrap.append(st);
     document.body.appendChild(wrap);
     return sleep(1900).then(() => {
       wrap.classList.add("out");
@@ -517,7 +524,7 @@
     if (RM) return;
     const cv = document.createElement("canvas");
     cv.className = "confetti-cv";
-    const dpr = Math.min(2, window.devicePixelRatio || 1), W = innerWidth, H = innerHeight;
+    const dpr = Math.min(1.5, window.devicePixelRatio || 1), W = innerWidth, H = innerHeight;
     cv.width = W * dpr; cv.height = H * dpr;
     document.body.appendChild(cv);
     const ctx = cv.getContext("2d");
@@ -526,7 +533,7 @@
     const cs = getComputedStyle(document.documentElement);
     const colors = [cs.getPropertyValue("--accent"), cs.getPropertyValue("--ink"), "#e0a63a", "#e8795a", "#f2c9a0", "#7fb8c4", "#fbf8f2"].map((c) => c.trim() || "#e0a63a");
     const ps = [];
-    for (let i = 0; i < 150; i++) {
+    for (let i = 0; i < 110; i++) {
       const side = i % 3, ang = (side === 0 ? -Math.PI / 2 - 0.9 : side === 1 ? -Math.PI / 2 + 0.9 : -Math.PI / 2) + (Math.random() - .5) * 0.9;
       const sp = (side === 2 ? 11 : 13) + Math.random() * 9;
       ps.push({
@@ -582,9 +589,36 @@
     return c;
   }
 
+  const decodeImg = (src) => loadImg(src).then(async (im) => {
+    if (im && im.decode) { try { await im.decode(); } catch (e) {} }
+    return im;
+  });
+  const idle = (fn) => (window.requestIdleCallback ? requestIdleCallback(fn, { timeout: 1500 }) : setTimeout(fn, 200));
+  let prePromise = null, preDone = false;
+  // load + decode both images and build the canvases once; safe to call many times
+  function prepareReveal() {
+    if (prePromise) return prePromise;
+    const F = S.final, out = { color: null, sk: null, rv: null };
+    prePromise = (async () => {
+      const [color, sk0] = await Promise.all([decodeImg(F.sketchPhoto), decodeImg(F.sketchImage || "img/final_sketch.jpg")]);
+      out.color = color; out.sk = sk0;
+      if (color) {
+        if (!out.sk) {   // fallback only: heavy per-pixel generation, done in idle time
+          await new Promise((r) => idle(r));
+          try { out.sk = makeSketch(color); } catch (e) { out.sk = null; }
+        }
+        await new Promise((r) => idle(r));
+        try { out.rv = paintReveal(out.sk, color); } catch (e) { out.rv = null; }
+      }
+      preDone = true;
+      return out;
+    })();
+    return prePromise;
+  }
+
   // sk = sketch (canvas|img) or null, color = img
   function paintReveal(sk, color) {
-    const sc = Math.min(1, 1200 / color.naturalWidth), W = Math.round(color.naturalWidth * sc), H = Math.round(color.naturalHeight * sc);
+    const sc = Math.min(1, 1000 / color.naturalWidth), W = Math.round(color.naturalWidth * sc), H = Math.round(color.naturalHeight * sc);
     const mk = () => { const c = document.createElement("canvas"); c.width = W; c.height = H; return c; };
     const skc = mk(), paint = mk(), mask = mk();
     const sx = skc.getContext("2d"), px = paint.getContext("2d"), mx = mask.getContext("2d");
@@ -669,21 +703,12 @@
     inner.append(wrap, letter);
     root.appendChild(inner);
 
-    // load photo (+ optional hand-made sketch)
-    const color = await loadImg(F.sketchPhoto);
-    const ok = !!color;
-    let rv = null;
+    // photo + sketch + canvases are normally prepared ahead of time (see prepareReveal)
+    const pre = await prepareReveal();
+    const color = pre.color, ok = !!color;
+    const rv = pre.rv;
     const ps = h("div", "photo-stage");
-    if (ok) {
-      let sk = await loadImg(F.sketchImage || "img/final_sketch.jpg");
-      if (!sk) { try { sk = makeSketch(color); } catch (e) { sk = null; } }
-      try {
-        rv = paintReveal(sk, color);
-        rv.canvases.forEach((c) => ps.appendChild(c));
-      } catch (e) {
-        rv = null; ps.append(color);
-      }
-    }
+    if (ok) { if (rv) rv.canvases.forEach((c) => ps.appendChild(c)); else ps.append(color); }
     document.body.append(root, ps);
     root.style.animation = "none";
     stage.style.visibility = "hidden";
@@ -703,6 +728,7 @@
       await wait(1050);
     }
     if (ok) built.photo.style.backgroundImage = "url(" + F.sketchPhoto + ")";
+    if (rv) rv.canvases.forEach((cv) => { cv.width = cv.height = 0; });
     ps.remove();
     bigConfetti();
     await wait(800);
@@ -742,6 +768,8 @@
   else if (DSTATE === "final") { state.step = N + 1; }
 
   if (!DEBUG) notify(S.notify.open);
+  fontsReady();
   next();
+  setTimeout(prepareReveal, DSTATE === "pass" ? 0 : 1200);   // warm images/canvases during the quiz
   if (DSTATE === "q1answered") setTimeout(() => { const b = document.querySelector(".opt"); if (b) b.click(); }, 700);
 })();

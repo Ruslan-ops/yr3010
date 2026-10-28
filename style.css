@@ -201,7 +201,7 @@ h2 { font-size: 25px; }
 .bubble.swap-in { animation: swapIn .3s var(--ease) both; }
 @keyframes swapIn { from { opacity: 0; transform: translateY(-8px) scale(.96); } to { opacity: 1; transform: none; } }
 .fx { position: fixed; inset: 0; z-index: 80; pointer-events: none; overflow: hidden; }
-.fx i { position: absolute; font-style: normal; line-height: 1; will-change: transform, opacity; }
+.fx i { position: absolute; font-style: normal; line-height: 1; }
 .confetti-cv { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 90; pointer-events: none; }
 
 /* ---------- verification stamp ---------- */
@@ -211,7 +211,7 @@ h2 { font-size: 25px; }
   --ok: #2f8f5b; color: var(--ok); text-align: center; padding: 14px 22px 12px;
   border: 5px solid var(--ok); border-radius: 16px; outline: 2px solid var(--ok); outline-offset: 4px;
   background: rgba(244, 239, 230, .88); font-family: "JetBrains Mono", monospace; font-weight: 800; text-transform: uppercase;
-  mix-blend-mode: multiply; filter: url(#inkRough); opacity: .92;
+  opacity: .92; will-change: transform, opacity;
   transform: rotate(-8deg); animation: stampSlam .5s cubic-bezier(.2, .9, .25, 1) both, stampShake .35s .5s linear both;
 }
 .stamp-main { font-size: 24px; letter-spacing: .06em; line-height: 1.1; }
