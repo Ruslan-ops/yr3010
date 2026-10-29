@@ -386,8 +386,8 @@
             return;
           }
           btns.forEach((x) => x.classList.add(x === b ? "chosen" : "faded"));
-          bigConfetti();
           const stamped = stampVerified();
+          setTimeout(bigConfetti, 250);
           await react(slot, o.reaction);
           await stamped;
           // stamp stays on screen (never a blank screen) until the photo is ready, max ~8s
@@ -761,7 +761,21 @@
     const out = h("div", "outro", F.outro);
     letter.appendChild(out);
     void out.offsetWidth; out.classList.add("on");
-    out.scrollIntoView({ behavior: RM ? "auto" : "smooth", block: "end" });
+    if (F.reply) {
+      await wait(600);
+      const rb = h("button", "btn reply", F.reply.text);
+      rb.onclick = () => {
+        notify(S.notify.reply);
+        const tg = window.Telegram && window.Telegram.WebApp;
+        try {
+          if (tg && typeof tg.openTelegramLink === "function") tg.openTelegramLink(F.reply.url);
+          else window.open(F.reply.url, "_blank");
+        } catch (e) { try { window.open(F.reply.url, "_blank"); } catch (e2) {} }
+      };
+      letter.appendChild(rb);
+      void rb.offsetWidth; rb.classList.add("on");
+      rb.scrollIntoView({ behavior: RM ? "auto" : "smooth", block: "end" });
+    } else out.scrollIntoView({ behavior: RM ? "auto" : "smooth", block: "end" });
   }
 
   /* ---------- router ---------- */

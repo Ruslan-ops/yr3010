@@ -208,11 +208,12 @@ h2 { font-size: 25px; }
   border: 5px solid var(--ok); border-radius: 16px; outline: 2px solid var(--ok); outline-offset: 4px;
   background: rgba(244, 239, 230, .88); font-family: "JetBrains Mono", monospace; font-weight: 800; text-transform: uppercase;
   opacity: .92; will-change: transform, opacity;
-  transform: rotate(-8deg); animation: stampSlam .5s cubic-bezier(.2, .9, .25, 1) both, stampShake .35s .5s linear both;
+  transform: rotate(-6deg); animation: stampIn .55s cubic-bezier(.2, .8, .2, 1) both;
 }
 .stamp-main { font-size: 24px; letter-spacing: .06em; line-height: 1.1; }
 .stamp-sub { margin-top: 8px; padding-top: 8px; border-top: 3px solid var(--ok); font-size: 20px; letter-spacing: .2em; }
-@keyframes stampSlam { 0% { transform: rotate(-14deg) scale(2.2); opacity: 0; } 55% { opacity: .95; } 78% { transform: rotate(-7deg) scale(.94); } 100% { transform: rotate(-8deg) scale(1); opacity: .92; } }
-@keyframes stampShake { 0%, 100% { translate: 0 0; } 20% { translate: -4px 3px; } 40% { translate: 4px -3px; } 60% { translate: -2px 2px; } 80% { translate: 2px -1px; } }
-@keyframes stampFade { from { opacity: 0; transform: rotate(-8deg); } to { opacity: .92; transform: rotate(-8deg); } }
+@keyframes stampIn { from { opacity: 0; transform: rotate(-4deg) scale(1.12); } to { opacity: .92; transform: rotate(-6deg) scale(1); } }
+@keyframes stampFade { from { opacity: 0; transform: rotate(-6deg); } to { opacity: .92; transform: rotate(-6deg); } }
 @media (prefers-reduced-motion: reduce) { .stamp { animation: stampFade .3s both; } }
+.btn.reply { animation: none; opacity: 0; margin-top: 26px; transition: opacity .7s ease, transform .2s var(--ease), background .25s; }
+.btn.reply.on { opacity: 1; }
