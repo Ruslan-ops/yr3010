@@ -173,10 +173,12 @@
     try { if (window.Intl && Intl.Segmenter) return Array.from(new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(str), (x) => x.segment); } catch (e) {}
     return Array.from(str);
   };
+  // Warm the cache for picture effects so they pop instantly on tap.
+  S.questions.forEach((q) => (q.options || []).forEach((o) => { if (o.fx && o.fx.img) { const im = new Image(); im.decoding = "async"; im.src = o.fx.img; } }));
   function runFx(fx, btn, slot) {
-    if (RM || !fx || !fx.emoji) return;
-    const list = graphemes(fx.emoji).filter((g) => g.trim());
-    if (!list.length) return;
+    if (RM || !fx || !(fx.emoji || fx.img)) return;
+    const list = graphemes(fx.emoji || "").filter((g) => g.trim());
+    if (!list.length && !fx.img) return;
     const W = window.innerWidth, H = window.innerHeight, R = Math.random;
     const box = document.createElement("div");
     box.className = "fx";
@@ -188,12 +190,14 @@
     const go = (e, frames, o) => { e.style.willChange = "transform, opacity"; const an = e.animate(frames, Object.assign({ fill: "both", easing: "linear" }, o)); an.onfinish = () => { e.style.willChange = "auto"; e.style.visibility = "hidden"; }; return an; };
     const br = btn ? btn.getBoundingClientRect() : { left: W / 2, top: H / 2, width: 0, height: 0 };
     const sr = slot ? slot.getBoundingClientRect() : br;
+    // Effects must stay above the reaction bubble so they never cover its text.
+    const floor = Math.max(140, Math.min(H - 40, slot ? sr.top - 12 : H - 40));
     let life = 3200;
     const type = fx.type;
     if (type === "count") {
       const n = fx.count || list.length;
       const size = n > 6 ? 30 : 40, pad = 28, step = (W - pad * 2 - size) / Math.max(n - 1, 1);
-      const ground = H - 120;
+      const ground = floor - size - 6;
       for (let i = 0; i < n; i++) {
         const e = mk(list[i % list.length], size);
         const x = n === 1 ? W / 2 - size / 2 : pad + step * i + (R() * 8 - 4);
@@ -220,8 +224,8 @@
         go(e, [
           { transform: "translate3d(0,0,0) rotate(" + (R() * 40 - 20) + "deg)", opacity: 0 },
           { opacity: 1, offset: .08 },
-          { opacity: 1, offset: .9 },
-          { transform: "translate3d(" + sw + "px," + (H + 60) + "px,0) rotate(" + r + "deg)", opacity: 0 }
+          { opacity: 1, offset: .75 },
+          { transform: "translate3d(" + sw + "px," + (floor + 10) + "px,0) rotate(" + r + "deg)", opacity: 0 }
         ], { duration: 1400 + R() * 800, delay: R() * 700, easing: "cubic-bezier(.4,.1,.7,1)" });
       }
     } else if (type === "burst") {
@@ -231,10 +235,11 @@
         e.style.left = cx - 14 + "px"; e.style.top = cy - 14 + "px";
         const ang = -Math.PI / 2 + (R() - .5) * Math.PI * 1.7, v = 90 + R() * 110;
         const dx = Math.cos(ang) * v, dy = Math.sin(ang) * v, r = R() * 160 - 80;
+        const fall = Math.min(dy + 150, floor - cy - 30);
         go(e, [
           { transform: "translate3d(0,0,0) scale(.4)", opacity: 1 },
           { transform: "translate3d(" + dx * .6 + "px," + (dy * .9 - 10) + "px,0) rotate(" + r * .5 + "deg) scale(1.1)", opacity: 1, offset: .4, easing: "ease-out" },
-          { transform: "translate3d(" + dx + "px," + (dy + 150) + "px,0) rotate(" + r + "deg) scale(.9)", opacity: 0 }
+          { transform: "translate3d(" + dx + "px," + fall + "px,0) rotate(" + r + "deg) scale(.9)", opacity: 0 }
         ], { duration: 950 + R() * 150, easing: "ease-in" });
       }
       life = 1400;
@@ -256,7 +261,7 @@
     } else if (type === "single") {
       const e = mk(list[0], 72);
       e.style.left = (W - 110) + "px";
-      e.style.top = Math.max(60, Math.min(H - 120, sr.top - 20)) + "px";
+      e.style.top = Math.max(60, floor - 84) + "px";
       go(e, [
         { transform: "scale(0) rotate(0deg)", opacity: 0, offset: 0 },
         { transform: "scale(1.15) rotate(-8deg)", opacity: 1, offset: .25, easing: "ease-out" },
@@ -266,9 +271,24 @@
         { transform: "scale(.9) rotate(0deg)", opacity: 0, offset: 1 }
       ], { duration: 1600 });
       life = 1800;
+    } else if (type === "image") {
+      const e = document.createElement("img");
+      e.src = fx.img; e.alt = "";
+      const w = Math.min(W * .62, 260), hgt = w * (fx.ratio || .79);
+      Object.assign(e.style, { position: "absolute", width: w + "px", height: hgt + "px", left: (W - w) / 2 + "px", top: Math.max(60, floor - hgt - 4) + "px", filter: "drop-shadow(0 10px 18px rgba(20,33,61,.22))" });
+      box.appendChild(e);
+      go(e, [
+        { transform: "translate3d(0,-40px,0) scale(.3) rotate(-25deg)", opacity: 0, offset: 0 },
+        { transform: "translate3d(0,6px,0) scale(1.06) rotate(4deg)", opacity: 1, offset: .18, easing: "ease-out" },
+        { transform: "translate3d(0,0,0) scale(1) rotate(-3deg)", offset: .3 },
+        { transform: "translate3d(0,0,0) scale(1) rotate(2deg)", offset: .42 },
+        { transform: "translate3d(0,0,0) scale(1) rotate(0deg)", opacity: 1, offset: .82 },
+        { transform: "translate3d(0,-10px,0) scale(.92) rotate(0deg)", opacity: 0, offset: 1 }
+      ], { duration: 2600 });
+      life = 2700;
     } else if (type === "drive") {
       const e = mk(list[0], 56);
-      e.style.left = "0px"; e.style.top = H * .65 + "px";
+      e.style.left = "0px"; e.style.top = Math.min(H * .65, floor - 70) + "px";
       const p = (x, y) => "translate3d(" + x + "px," + y + "px,0) scaleX(-1)";
       go(e, [
         { transform: p(-80, 0), opacity: 1, offset: 0 },
