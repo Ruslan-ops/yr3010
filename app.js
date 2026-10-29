@@ -787,10 +787,13 @@
       rb.onclick = () => {
         notify(S.notify.reply);
         const tg = window.Telegram && window.Telegram.WebApp;
-        try {
-          if (tg && typeof tg.openTelegramLink === "function") tg.openTelegramLink(F.reply.url);
-          else window.open(F.reply.url, "_blank");
-        } catch (e) { try { window.open(F.reply.url, "_blank"); } catch (e2) {} }
+        // Give the notification request a moment before Telegram minimizes the app.
+        setTimeout(() => {
+          try {
+            if (tg && typeof tg.openTelegramLink === "function") tg.openTelegramLink(F.reply.url);
+            else window.open(F.reply.url, "_blank");
+          } catch (e) { try { window.open(F.reply.url, "_blank"); } catch (e2) {} }
+        }, 450);
       };
       letter.appendChild(rb);
       void rb.offsetWidth; rb.classList.add("on");
